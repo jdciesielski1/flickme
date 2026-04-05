@@ -161,16 +161,23 @@ main {
 .tag-input::placeholder { color: var(--text-3); }
 
 /* ── Autocomplete ── */
-.tag-input-wrapper { position: relative; }
+.tag-input-wrapper {
+  position: relative;
+  z-index: 200;
+}
+
+.tag-input-wrapper:focus-within {
+  z-index: 999;
+}
 
 .autocomplete-dropdown {
   position: absolute; top: calc(100% + 6px); left: 0; right: 0;
-  background: var(--surface2);
-  border: 1px solid var(--border-hi);
+  background: #1e1e24;
+  border: 1px solid rgba(255,255,255,0.2);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  z-index: 100;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  z-index: 1000;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.8);
   animation: fadeDown 0.12s ease;
 }
 
@@ -183,33 +190,34 @@ main {
   display: flex; align-items: center; gap: 12px;
   padding: 10px 14px; cursor: pointer;
   transition: background 0.1s;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  background: #1e1e24;
 }
 .ac-item:last-child { border-bottom: none; }
-.ac-item:hover, .ac-item.focused { background: var(--gold-dim); }
+.ac-item:hover, .ac-item.focused { background: #2a2730; }
 
 .ac-poster {
   width: 32px; height: 48px; object-fit: cover;
   border-radius: 3px; flex-shrink: 0;
-  background: var(--surface);
+  background: #2a2a30;
 }
 
 .ac-poster-placeholder {
   width: 32px; height: 48px; flex-shrink: 0;
-  background: var(--surface); border-radius: 3px;
+  background: #2a2a30; border-radius: 3px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 16px; color: var(--text-3);
+  font-size: 16px; color: #6a6866;
 }
 
 .ac-info { flex: 1; min-width: 0; }
 
 .ac-name {
-  font-size: 14px; color: var(--text);
+  font-size: 14px; color: #f0ede6; font-weight: 500;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
 .ac-meta {
-  font-size: 11px; color: var(--text-2);
+  font-size: 11px; color: #b0ada6;
   font-family: 'DM Mono', monospace;
   margin-top: 2px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
