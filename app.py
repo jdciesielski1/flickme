@@ -113,15 +113,15 @@ def api_genres():
     genres = sorted(GENRE_NAME_TO_ID.keys())
     return jsonify({"genres": [g.title() for g in genres]})
 
-
-if __name__ == "__main__":
-    app.run(debug=True, port=5000)
-
-
-
 @app.route("/debug")
 def debug():
     return jsonify({
         "tmdb_key_set": bool(os.environ.get("TMDB_API_KEY")),
         "tmdb_key_length": len(os.environ.get("TMDB_API_KEY", "")),
     })
+
+if __name__ == "__main__":
+    app.run(debug=True, port=5000)
+
+
+
