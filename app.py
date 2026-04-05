@@ -116,3 +116,12 @@ def api_genres():
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
+
+
+
+@app.route("/debug")
+def debug():
+    return jsonify({
+        "tmdb_key_set": bool(os.environ.get("TMDB_API_KEY")),
+        "tmdb_key_length": len(os.environ.get("TMDB_API_KEY", "")),
+    })
