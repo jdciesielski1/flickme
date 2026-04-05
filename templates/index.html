@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlickMe</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body>
+  <div class="grain"></div>
+
+  <header>
+    <div class="logo">
+      <span class="logo-mark">◈</span>
+      <span class="logo-text">FlickMe</span>
+    </div>
+    <p class="tagline">Tell us what you love. We'll find what you're missing.</p>
+  </header>
+
+  <main>
+    <form id="pref-form" autocomplete="off">
+
+      <!-- Movies -->
+      <section class="input-section">
+        <div class="section-header">
+          <span class="section-num">01</span>
+          <div>
+            <h2>Films you love</h2>
+            <p class="section-hint">Up to 5 movies — the more specific, the better</p>
+          </div>
+        </div>
+        <div class="tag-input-wrapper">
+          <div class="tag-input-group" id="movies-group">
+            <div class="tags-display" id="movies-tags"></div>
+            <input type="text" class="tag-input" id="movies-input" placeholder="Type a film title and press Enter">
+          </div>
+          <div class="autocomplete-dropdown" id="movies-dropdown" hidden></div>
+        </div>
+      </section>
+
+      <!-- Actors -->
+      <section class="input-section">
+        <div class="section-header">
+          <span class="section-num">02</span>
+          <div>
+            <h2>Actors you follow</h2>
+            <p class="section-hint">Up to 5 actors whose work you seek out</p>
+          </div>
+        </div>
+        <div class="tag-input-wrapper">
+          <div class="tag-input-group" id="actors-group">
+            <div class="tags-display" id="actors-tags"></div>
+            <input type="text" class="tag-input" id="actors-input" placeholder="Type a name and press Enter">
+          </div>
+          <div class="autocomplete-dropdown" id="actors-dropdown" hidden></div>
+        </div>
+      </section>
+
+      <!-- Directors -->
+      <section class="input-section">
+        <div class="section-header">
+          <span class="section-num">03</span>
+          <div>
+            <h2>Directors you admire</h2>
+            <p class="section-hint">Up to 5 directors whose style speaks to you</p>
+          </div>
+        </div>
+        <div class="tag-input-wrapper">
+          <div class="tag-input-group" id="directors-group">
+            <div class="tags-display" id="directors-tags"></div>
+            <input type="text" class="tag-input" id="directors-input" placeholder="Type a name and press Enter">
+          </div>
+          <div class="autocomplete-dropdown" id="directors-dropdown" hidden></div>
+        </div>
+      </section>
+
+      <!-- Genre -->
+      <section class="input-section">
+        <div class="section-header">
+          <span class="section-num">04</span>
+          <div>
+            <h2>Genre mood</h2>
+            <p class="section-hint">What are you in the mood for tonight?</p>
+          </div>
+        </div>
+        <div class="genre-grid" id="genre-grid"></div>
+        <div class="genre-mode-row">
+          <label class="mode-label">
+            <input type="checkbox" id="hard-filter-toggle">
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            Strict genre filter
+          </label>
+          <span class="mode-hint">Only show films in selected genres</span>
+        </div>
+      </section>
+
+      <div class="form-footer">
+        <button type="submit" class="submit-btn" id="submit-btn">
+          <span class="btn-text">Find my films</span>
+          <span class="btn-icon">→</span>
+        </button>
+        <button type="button" class="clear-btn" id="clear-btn">Clear all</button>
+      </div>
+    </form>
+
+    <!-- Loading state -->
+    <div class="loading-state" id="loading-state" hidden>
+      <div class="film-strip">
+        <div class="frame"></div><div class="frame"></div><div class="frame"></div>
+        <div class="frame"></div><div class="frame"></div><div class="frame"></div>
+      </div>
+      <p class="loading-text">Scanning the cinematic universe<span class="dots"></span></p>
+    </div>
+
+    <!-- Error state -->
+    <div class="error-state" id="error-state" hidden>
+      <p class="error-text" id="error-message"></p>
+    </div>
+
+    <!-- Results -->
+    <section class="results-section" id="results-section" hidden>
+      <div class="results-header">
+        <h2 class="results-title">Your films</h2>
+        <p class="results-meta" id="results-meta"></p>
+      </div>
+      <div class="unresolved-warning" id="unresolved-warning" hidden>
+        <span class="warn-icon">⚠</span>
+        <span id="unresolved-text"></span>
+      </div>
+      <div class="cards-grid" id="cards-grid"></div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Powered by <a href="https://www.themoviedb.org/" target="_blank">TMDB</a> &amp; Claude · Data from MovieLens</p>
+  </footer>
+
+  <script src="/static/js/main.js"></script>
+</body>
+</html>
