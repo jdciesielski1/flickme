@@ -2,8 +2,13 @@
 Hybrid scorer.
 Scores each candidate against the user profile using 5 signals,
 then returns the top-N ranked results with full metadata.
+
+Performance optimisations:
+- Credits are fetched in parallel using a thread pool (max_workers=10)
+- Credits fetch is skipped entirely when no actors/directors are in the profile
 """
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from src.tmdb_client import TMDBClient
 from src.profile_builder import UserProfile
 
@@ -17,7 +22,7 @@ WEIGHTS = {
 }
 
 
-def _genre_overlap_score(candidate_genre_ids: list[int], seed_genre_ids: list[int]) -> float:
+def _genre_overlap_score(candidate_genre_ids, seed_genre_ids):
     """Jaccard similarity between candidate genres and aggregated seed genres."""
     if not seed_genre_ids or not candidate_genre_ids:
         return 0.0
@@ -26,19 +31,18 @@ def _genre_overlap_score(candidate_genre_ids: list[int], seed_genre_ids: list[in
     return len(a & b) / len(a | b)
 
 
-def _genre_alignment_score(candidate_genre_ids: list[int], requested_genre_ids: list[int]) -> float:
+def _genre_alignment_score(candidate_genre_ids, requested_genre_ids):
     """How well the candidate matches the explicitly requested genres."""
     if not requested_genre_ids:
-        return 0.5  # neutral if no genre requested
+        return 0.5
     matches = sum(1 for g in requested_genre_ids if g in candidate_genre_ids)
     return matches / len(requested_genre_ids)
 
 
-def _quality_score(vote_average: float, vote_count: int) -> float:
+def _quality_score(vote_average, vote_count):
     """Bayesian-ish quality score. Penalizes low vote counts."""
     if vote_count < 10:
         return 0.0
-    # Normalize to 0-1, apply vote count confidence
     raw = vote_average / 10.0
     confidence = min(vote_count / 500, 1.0)
     return raw * confidence + raw * (1 - confidence) * 0.5
@@ -48,90 +52,92 @@ class HybridScorer:
     def __init__(self, tmdb: TMDBClient):
         self.tmdb = tmdb
 
-    def score_and_rank(
-        self,
-        candidates: list[dict],
-        profile: UserProfile,
-        top_n: int = 10,
-        genre_mode: str = "soft_boost",
-    ) -> list[dict]:
+    def score_and_rank(self, candidates, profile, top_n=10, genre_mode="soft_boost"):
         """
         Score each candidate and return the top_n with full metadata.
-        genre_mode="hard_filter" drops non-matching genre candidates entirely.
-        genre_mode="soft_boost" keeps all but boosts matching ones.
+
+        Credits are fetched in parallel (10 concurrent requests) and only
+        when actor or director signals are present in the profile.
         """
         seed_genre_ids = profile.all_genre_ids_from_seeds
-        scored = []
+        needs_credits = bool(profile.actor_ids or profile.director_ids)
 
-        for movie in candidates:
+        def score_one(movie):
             candidate_genre_ids = movie.get("genre_ids", [])
 
             # Hard filter: skip if none of the requested genres match
             if genre_mode == "hard_filter" and profile.genre_ids:
                 if not any(g in candidate_genre_ids for g in profile.genre_ids):
-                    continue
+                    return None
 
-            # Fetch credits to check actor/director match
             cast_ids = set()
             crew_director_ids = set()
-            poster_url = None
+            poster_url = self.tmdb.get_movie_poster_url(movie.get("poster_path"))
 
-            try:
-                details = self.tmdb.get_movie_details(movie["id"])
-                credits = details.get("credits", {})
-                cast_ids = {c["id"] for c in credits.get("cast", [])[:20]}
-                crew_director_ids = {
-                    c["id"] for c in credits.get("crew", [])
-                    if c.get("job") == "Director"
-                }
-                poster_url = self.tmdb.get_movie_poster_url(details.get("poster_path"))
-            except Exception:
-                poster_url = self.tmdb.get_movie_poster_url(movie.get("poster_path"))
+            # Only hit the credits endpoint when we have actor/director signals
+            if needs_credits:
+                try:
+                    details = self.tmdb.get_movie_details(movie["id"])
+                    credits = details.get("credits", {})
+                    cast_ids = {c["id"] for c in credits.get("cast", [])[:20]}
+                    crew_director_ids = {
+                        c["id"] for c in credits.get("crew", [])
+                        if c.get("job") == "Director"
+                    }
+                    poster_url = self.tmdb.get_movie_poster_url(
+                        details.get("poster_path")
+                    ) or poster_url
+                except Exception:
+                    pass
 
-            # Compute each signal
-            content_sim = _genre_overlap_score(candidate_genre_ids, seed_genre_ids)
-
+            content_sim   = _genre_overlap_score(candidate_genre_ids, seed_genre_ids)
             actor_matches = [aid for aid in profile.actor_ids if aid in cast_ids]
-            actor_score = min(len(actor_matches) / max(len(profile.actor_ids), 1), 1.0)
-
-            director_matches = [did for did in profile.director_ids if did in crew_director_ids]
-            director_score = 1.0 if director_matches else 0.0
-
-            genre_align = _genre_alignment_score(candidate_genre_ids, profile.genre_ids)
-
-            quality = _quality_score(
-                movie.get("vote_average", 0),
-                movie.get("vote_count", 0),
-            )
+            actor_score   = min(len(actor_matches) / max(len(profile.actor_ids), 1), 1.0)
+            dir_matches   = [did for did in profile.director_ids if did in crew_director_ids]
+            dir_score     = 1.0 if dir_matches else 0.0
+            genre_align   = _genre_alignment_score(candidate_genre_ids, profile.genre_ids)
+            quality       = _quality_score(movie.get("vote_average", 0), movie.get("vote_count", 0))
 
             final_score = (
                 WEIGHTS["content_similarity"] * content_sim +
                 WEIGHTS["actor_match"]        * actor_score +
-                WEIGHTS["director_match"]     * director_score +
+                WEIGHTS["director_match"]     * dir_score +
                 WEIGHTS["genre_alignment"]    * genre_align +
                 WEIGHTS["quality_signal"]     * quality
             )
 
-            scored.append({
-                "tmdb_id": movie["id"],
-                "title": movie.get("title", "Unknown"),
-                "year": (movie.get("release_date") or "")[:4],
-                "overview": movie.get("overview", ""),
+            return {
+                "tmdb_id":    movie["id"],
+                "title":      movie.get("title", "Unknown"),
+                "year":       (movie.get("release_date") or "")[:4],
+                "overview":   movie.get("overview", ""),
                 "poster_url": poster_url,
                 "vote_average": movie.get("vote_average", 0),
-                "vote_count": movie.get("vote_count", 0),
-                "genre_ids": candidate_genre_ids,
-                "score": round(final_score, 4),
+                "vote_count":   movie.get("vote_count", 0),
+                "genre_ids":    candidate_genre_ids,
+                "score":        round(final_score, 4),
                 "score_breakdown": {
                     "content_similarity": round(content_sim, 3),
-                    "actor_match": round(actor_score, 3),
-                    "director_match": round(director_score, 3),
-                    "genre_alignment": round(genre_align, 3),
-                    "quality_signal": round(quality, 3),
+                    "actor_match":        round(actor_score, 3),
+                    "director_match":     round(dir_score, 3),
+                    "genre_alignment":    round(genre_align, 3),
+                    "quality_signal":     round(quality, 3),
                 },
-                "matched_actors": actor_matches,
-                "matched_directors": director_matches,
-            })
+                "matched_actors":    actor_matches,
+                "matched_directors": dir_matches,
+            }
+
+        # Fetch credits for all candidates in parallel
+        scored = []
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = {executor.submit(score_one, movie): movie for movie in candidates}
+            for future in as_completed(futures):
+                try:
+                    result = future.result()
+                    if result is not None:
+                        scored.append(result)
+                except Exception:
+                    pass
 
         scored.sort(key=lambda x: x["score"], reverse=True)
         return scored[:top_n]
