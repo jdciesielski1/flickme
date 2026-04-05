@@ -12,7 +12,7 @@ class CandidateGenerator:
     def __init__(self, tmdb: TMDBClient):
         self.tmdb = tmdb
 
-    def generate(self, profile: UserProfile, target_count: int = 150) -> list[dict]:
+    def generate(self, profile: UserProfile, target_count: int = 75) -> list:
         """
         Generate a broad candidate pool from multiple sources:
         1. TMDB similar/recommended for each seed movie
@@ -21,11 +21,12 @@ class CandidateGenerator:
         4. TMDB discover filtered by genre (if provided)
 
         Returns deduplicated list of raw TMDB movie dicts.
+        Target reduced to 75 (from 150) for faster scoring on hosted environments.
         """
-        seen_ids = set(profile.seed_movie_ids)  # exclude seeds from results
+        seen_ids = set(profile.seed_movie_ids)
         candidates = []
 
-        def add(movies: list[dict]):
+        def add(movies):
             for m in movies:
                 mid = m.get("id")
                 if mid and mid not in seen_ids:
@@ -57,7 +58,7 @@ class CandidateGenerator:
                 except Exception:
                     pass
 
-        # 4. Discover by genre (soft signal -- just adds genre-specific candidates)
+        # 4. Discover by genre
         if profile.genre_ids:
             try:
                 add(self.tmdb.discover_movies(
@@ -68,8 +69,8 @@ class CandidateGenerator:
             except Exception:
                 pass
 
-        # If we're still thin, pull top popular movies in requested genre
-        if len(candidates) < 50 and profile.genre_ids:
+        # If still thin, pull popular movies in requested genre
+        if len(candidates) < 30 and profile.genre_ids:
             try:
                 add(self.tmdb.discover_movies(
                     with_genres=profile.genre_ids,
